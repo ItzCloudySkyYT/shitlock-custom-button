@@ -5,7 +5,7 @@ local CAS = game:GetService("ContextActionService")
 local player = Players.LocalPlayer
 
 -------------------------------------------------
--- GUI (CREATE FIRST)
+-- GUI FIRST (ALWAYS)
 -------------------------------------------------
 local gui = Instance.new("ScreenGui")
 gui.Name = "ShiftLockRebinder"
@@ -35,7 +35,7 @@ label.BackgroundTransparency = 1
 label.TextWrapped = true
 label.TextScaled = true
 label.TextColor3 = Color3.new(1,1,1)
-label.Text = "Waiting..."
+label.Text = "Loading..."
 
 local bindBtn = Instance.new("TextButton", frame)
 bindBtn.Size = UDim2.new(1,-10,0,30)
@@ -65,24 +65,24 @@ miniBtn.MouseButton1Click:Connect(function()
 end)
 
 -------------------------------------------------
--- SAFE MOUSELOCK DETECTION
+-- GET CAMERA + MOUSELOCK (CORRECT WAY)
 -------------------------------------------------
-local mouseLock
+local mouseLockController
 task.spawn(function()
 	local ps = player:WaitForChild("PlayerScripts")
 	local pm = require(ps:WaitForChild("PlayerModule"))
-	local cam = pm:GetCameras()
+	local cameras = pm:GetCameras()
 
-	while not mouseLock do
-		mouseLock = cam.activeMouseLockController or cam.MouseLockController
+	repeat
+		mouseLockController = cameras.activeMouseLockController
 		task.wait()
-	end
+	until mouseLockController
 
 	label.Text = "Key: G"
 
-	-- ONLY block shift AFTER success
+	-- Block Shift ONLY after success
 	CAS:BindAction(
-		"BlockShift",
+		"BlockShiftLock",
 		function()
 			return Enum.ContextActionResult.Sink
 		end,
@@ -93,18 +93,25 @@ task.spawn(function()
 end)
 
 -------------------------------------------------
--- KEY BINDING
+-- SHIFT-LOCK TOGGLE (NEW METHOD)
 -------------------------------------------------
+local shiftLocked = false
 local currentKey = Enum.KeyCode.G
 local waiting = false
+
+local function toggleShiftLock()
+	if not mouseLockController then return end
+	shiftLocked = not shiftLocked
+	mouseLockController:SetIsMouseLocked(shiftLocked)
+end
 
 local function bindKey()
 	CAS:UnbindAction("CustomShiftLock")
 	CAS:BindAction(
 		"CustomShiftLock",
 		function(_, state)
-			if state == Enum.UserInputState.Begin and mouseLock then
-				mouseLock:ToggleMouseLock()
+			if state == Enum.UserInputState.Begin then
+				toggleShiftLock()
 			end
 		end,
 		false,
@@ -114,6 +121,9 @@ end
 
 bindKey()
 
+-------------------------------------------------
+-- KEY CHANGE
+-------------------------------------------------
 bindBtn.MouseButton1Click:Connect(function()
 	waiting = true
 	label.Text = "Press a key..."
