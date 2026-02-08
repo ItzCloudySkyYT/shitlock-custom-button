@@ -1,98 +1,142 @@
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
+local CAS = game:GetService("ContextActionService")
 
 local player = Players.LocalPlayer
 
 -------------------------------------------------
--- GUI SETUP
+-- CONFIG (DEFAULT KEY)
+-------------------------------------------------
+local currentKey = Enum.KeyCode.G
+local waitingForKey = false
+
+-------------------------------------------------
+-- GET MOUSELOCK CONTROLLER
+-------------------------------------------------
+local function getMouseLockController()
+	local ps = player:WaitForChild("PlayerScripts")
+	local pm = require(ps:WaitForChild("PlayerModule"))
+	local cam = pm:GetCameras()
+	return cam.activeMouseLockController or cam.MouseLockController
+end
+
+local mouseLock
+repeat
+	task.wait()
+	mouseLock = getMouseLockController()
+until mouseLock
+
+-------------------------------------------------
+-- BLOCK SHIFT COMPLETELY
+-------------------------------------------------
+CAS:BindAction(
+	"BlockShiftLock",
+	function()
+		return Enum.ContextActionResult.Sink
+	end,
+	false,
+	Enum.KeyCode.LeftShift,
+	Enum.KeyCode.RightShift
+)
+
+-------------------------------------------------
+-- CUSTOM TOGGLE FUNCTION
+-------------------------------------------------
+local function toggleShiftLock()
+	if mouseLock then
+		mouseLock:ToggleMouseLock()
+	end
+end
+
+local function bindCustomKey()
+	CAS:UnbindAction("CustomShiftLock")
+	CAS:BindAction(
+		"CustomShiftLock",
+		function(_, state)
+			if state == Enum.UserInputState.Begin then
+				toggleShiftLock()
+			end
+		end,
+		false,
+		currentKey
+	)
+end
+
+bindCustomKey()
+
+-------------------------------------------------
+-- GUI
 -------------------------------------------------
 local gui = Instance.new("ScreenGui")
-gui.Name = "KeyPicker"
 gui.ResetOnSpawn = false
 gui.Parent = player:WaitForChild("PlayerGui")
 
-local frame = Instance.new("Frame")
-frame.Parent = gui
-frame.Size = UDim2.new(0,160,0,160)
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0,120,0,120)
 frame.Position = UDim2.new(0.05,0,0.4,0)
 frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 frame.Active = true
 frame.Draggable = true
+Instance.new("UICorner", frame)
 
-local corner = Instance.new("UICorner", frame)
-
--- Display label
-local label = Instance.new("TextLabel")
-label.Parent = frame
+local label = Instance.new("TextLabel", frame)
 label.Size = UDim2.new(1,-10,1,-40)
 label.Position = UDim2.new(0,5,0,35)
 label.BackgroundTransparency = 1
 label.TextScaled = true
 label.TextWrapped = true
 label.TextColor3 = Color3.new(1,1,1)
-label.Text = "Press any key..."
+label.Text = "ShiftLock\nKey:\n"..currentKey.Name
 
--- Title bar
-local title = Instance.new("TextLabel")
-title.Parent = frame
-title.Size = UDim2.new(1,-30,0,30)
-title.Position = UDim2.new(0,5,0,0)
-title.BackgroundTransparency = 1
-title.Text = "Key Picker"
-title.TextScaled = true
-title.TextColor3 = Color3.new(1,1,1)
-
--- Minimize button
-local minimizeBtn = Instance.new("TextButton")
-minimizeBtn.Parent = frame
-minimizeBtn.Size = UDim2.new(0,25,0,25)
-minimizeBtn.Position = UDim2.new(1,-28,0,3)
-minimizeBtn.Text = "-"
-minimizeBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
-
-local miniCorner = Instance.new("UICorner", minimizeBtn)
+local bindBtn = Instance.new("TextButton", frame)
+bindBtn.Size = UDim2.new(1,-10,0,30)
+bindBtn.Position = UDim2.new(0,5,0,5)
+bindBtn.Text = "Change Key"
+bindBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+Instance.new("UICorner", bindBtn)
 
 -------------------------------------------------
--- MINIMIZE LOGIC
+-- MINIMIZE BUTTON
 -------------------------------------------------
 local minimized = false
-local normalSize = frame.Size
-local normalChildren = {}
+local miniBtn = Instance.new("TextButton", frame)
+miniBtn.Size = UDim2.new(0,25,0,25)
+miniBtn.Position = UDim2.new(1,-28,1,-28)
+miniBtn.Text = "-"
+miniBtn.BackgroundColor3 = Color3.fromRGB(70,70,70)
+Instance.new("UICorner", miniBtn)
 
-local function setChildrenVisible(state)
-	for _,obj in pairs(frame:GetChildren()) do
-		if obj ~= minimizeBtn and obj:IsA("GuiObject") then
-			obj.Visible = state
-		end
-	end
-end
-
-minimizeBtn.MouseButton1Click:Connect(function()
+miniBtn.MouseButton1Click:Connect(function()
 	minimized = not minimized
-	
 	if minimized then
-		setChildrenVisible(false)
+		label.Visible = false
+		bindBtn.Visible = false
 		frame.Size = UDim2.new(0,40,0,40)
-		minimizeBtn.Text = "+"
-		minimizeBtn.Size = UDim2.new(1,-6,1,-6)
-		minimizeBtn.Position = UDim2.new(0,3,0,3)
+		miniBtn.Text = "+"
+		miniBtn.Position = UDim2.new(0,7,0,7)
 	else
-		frame.Size = normalSize
-		setChildrenVisible(true)
-		minimizeBtn.Text = "-"
-		minimizeBtn.Size = UDim2.new(0,25,0,25)
-		minimizeBtn.Position = UDim2.new(1,-28,0,3)
+		label.Visible = true
+		bindBtn.Visible = true
+		frame.Size = UDim2.new(0,120,0,120)
+		miniBtn.Text = "-"
+		miniBtn.Position = UDim2.new(1,-28,1,-28)
 	end
 end)
 
 -------------------------------------------------
--- KEY DETECTION
+-- KEY REBIND LOGIC
 -------------------------------------------------
-UIS.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-	if minimized then return end
-	
-	if input.UserInputType == Enum.UserInputType.Keyboard then
-		label.Text = "Enum.KeyCode." .. input.KeyCode.Name
-	end
+bindBtn.MouseButton1Click:Connect(function()
+	waitingForKey = true
+	label.Text = "Press any key..."
+end)
+
+UIS.InputBegan:Connect(function(input, gp)
+	if gp or not waitingForKey then return end
+	if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+
+	waitingForKey = false
+	currentKey = input.KeyCode
+	label.Text = "ShiftLock\nKey:\n"..currentKey.Name
+	bindCustomKey()
 end)
